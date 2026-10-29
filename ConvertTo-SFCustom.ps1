@@ -1,4 +1,3 @@
-
 <#
 .SYNOPSIS
 Converts an object or list of objects to various custom formats.
@@ -30,22 +29,23 @@ ConvertTo-SFCustom -Data $processes -Format HTML
 .NOTES
 ==============================================
 Name:		ConvertTo-SFCustom
-Version:	1.0
+Version:	1.1
 Author:     Jay Adams, Noxigen LLC
 Created:	2026-10-28
 Copyright:	Noxigen LLC. All rights reserved.
 
 Create secure GUIs for PowerShell with System Frontier.
 https://systemfrontier.com/
-    ==============================================
+==============================================
 #>
 function ConvertTo-SFCustom {
 	[CmdletBinding()]
 	param(
 		[object]$Data,
-		[ValidateSet('HTML','CSV','TSV','JSON','XML')]
+		[ValidateSet('HTML','CSV','TSV','JSON','XML','Console')]
 		[string]$Format,
-		[string[]]$Property
+		[string[]]$Property,
+		[hashtable]$Options = @{}
 	)
 
 	$result = ''
@@ -58,6 +58,18 @@ function ConvertTo-SFCustom {
 		$Data = $Data | Select-Object -Property $Property
 	}
 
+	$consoleFormat = { $Data | Format-Table -AutoSize | Out-String -Width 4096 }
+
+	$tableConfig = @{}
+	$tbc = 'table-border-color'
+	$thbgc = 'table-head-bgcolor'
+	$thc = 'table-head-color'
+	$trbgc = 'table-row-bgcolor'
+	$tableConfig.Add($tbc, ($Options[$tbc] ?? '#ccc'))
+	$tableConfig.Add($thbgc, ($Options[$thbgc] ?? '#244a64'))
+	$tableConfig.Add($thc, ($Options[$thc] ?? '#fff'))
+	$tableConfig.Add($trbgc, ($Options[$trbgc] ?? '#eef4f7'))
+
 	# Unique id for this instance
 	$id = (New-Guid).ToString().Split('-')[0]
 
@@ -68,27 +80,26 @@ function ConvertTo-SFCustom {
 
 			$style = @"
 <style>
-    #ctctable-$id table { border-collapse: collapse; width: 100%; }
-    #ctctable-$id th,
-    #ctctable-$id td {
-        border: 1px solid #ccc;
-        padding: 4px 6px;
-        text-align: left;
-	}
-    #ctctable-$id th { background-color: #244a64; color: white; }
-    #ctctable-$id tr:nth-child(even) { background-color: #eef4f7; }
+    #sfqc-$id { display:flex;justify-content:flex-end; }
+	#sfq-$id { border:1px solid #000;padding:2px; }
+    #sftbl-$id { overflow-x:auto;margin-top:-45px; }
+    #sftbl-$id table { border-collapse:collapse;width:100%; }
+    #sftbl-$id th,
+    #sftbl-$id td { border:1px solid $($tableConfig[$tbc]);padding:4px 6px;text-align: left; }
+    #sftbl-$id th { background-color:$($tableConfig[$thbgc]);color:$($tableConfig[$thc]); }
+    #sftbl-$id tr:nth-child(even) { background-color:$($tableConfig[$trbgc]); }
 </style>
 "@
 
 			$result = @"
 $style
-<div style="text-align:right; margin-bottom:3px"><input id="q-$id" placeholder="Search..."></div>
-<div id="ctctable-$id" style="overflow-x:auto">
+<div id="sfqc-$id"><input id="sfq-$id" placeholder="Search..."></div>
+<div id="sftbl-$id">
 	$table
 	<script>
-	document.getElementById('q-$id').oninput = e => {
+	document.getElementById('sfq-$id').oninput = e => {
 	const q = e.target.value.toLowerCase();
-	for (const row of document.querySelectorAll('#ctctable-$id tr:not(:first-child)'))
+	for (const row of document.querySelectorAll('#sftbl-$id tr:not(:first-child)'))
 		row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
 	};
 	</script>
@@ -116,13 +127,16 @@ $style
 			$result = ($Data | ConvertTo-Xml -As Document -Depth 99).OuterXml
 		}
 
+		'Console'
+		{
+			$result = & $consoleFormat
+		}
+
 		default # Console output
 		{
-			$result = $Data | Format-Table -AutoSize | Out-String -Width 4096
+			$result = & $consoleFormat
 		}
 	}
 
 	return $result
 }
-
-
